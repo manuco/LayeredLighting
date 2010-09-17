@@ -11,16 +11,16 @@ from PyQt4.Qt import *
 
 STEPS_BEFORE_COMPUTE = 3
 MAX_DEVIATION = 3
-MAX_STEPS = 4 * 4
+MAX_STEPS = 4 * 8
 
 class HBSUi(QWidget):
     def __init__(self, hbs, *args):
         QWidget.__init__(self, *args)
         self.prepareUi()
         self.hbs = hbs
-
+        self.nextBeat = 0
         self.connect(self.beatButton, SIGNAL("pressed()"), self.beat)
-
+        self.beatPerMesure = 4
         self.prepareTimers()
 
     def prepareUi(self):
@@ -41,6 +41,7 @@ class HBSUi(QWidget):
         self.lightOnTimer = QTimer()
         self.lightOffTimer = QTimer()
         self.stateTimer = QTimer()
+        self.lightOnTimer.setSingleShot(True)
         self.lightOffTimer.setSingleShot(True)
         self.stateTimer.setSingleShot(True)
         self.connect(self.lightOnTimer, SIGNAL("timeout()"), self.beatOn)
@@ -48,27 +49,39 @@ class HBSUi(QWidget):
         self.connect(self.stateTimer, SIGNAL("timeout()"), self.refreshState)
 
     def beatOn(self):
-        self.beatLabel.setText("B")
+        self.beatLabel.setText("B - %d" % ((self.beatCount % self.beatPerMesure) + 1))
         self.lightOffTimer.start()
+        self.beatCount += 1
+        if self.hbs.state == "adjusting":
+            self.nextBeat += self.hbs.beatLength
+        tmout = int((self.nextBeat - time.time()) * 1000)
+        if tmout > 0:
+            self.lightOnTimer.start(tmout)
 
     def beatOff(self):
-        self.beatLabel.setText(" ")
+        if self.hbs.state == "adjusting":
+            self.beatLabel.setText("   - %d" % ((self.beatCount % self.beatPerMesure) + 1))
+        else:
+            self.beatLabel.setText("")
 
     def beat(self):
         self.hbs.beat()
-        if self.hbs.deviation < MAX_DEVIATION:
-            self.lightOffTimer.setInterval((self.hbs.beatLength / 4) * 1000)
-            self.lightOnTimer.setInterval(self.hbs.beatLength * 1000)
-            self.lightOnTimer.start()
-        else:
-            self.lightOffTimer.setInterval(500)
-            self.lightOnTimer.stop()
-        self.beatOn()
+
         tc = time.time()
+        if self.hbs.state == "adjusting":
+            self.lightOffTimer.setInterval((self.hbs.beatLength / 6) * 1000)
+            self.nextBeat = tc
+            self.beatOn()
+
         if self.hbs.timeout > tc:
-            self.label.setText(self.hbs.state)
             self.stateTimer.setInterval((self.hbs.timeout - tc) * 1000)
             self.stateTimer.start()
+
+        if len(self.hbs.timecodes) == 1:
+            self.beatCount = 0
+
+        self.label.setText(self.hbs.state)
+        self.stats.setText("Bpm: %d\tDev: %0.2f" % (self.hbs.bpm, self.hbs.deviation))
 
     def refreshState(self):
         self.label.setText("ready")
@@ -76,9 +89,9 @@ class HBSUi(QWidget):
 class HumanBeatSensor(object):
     def __init__(self):
         self.state = "ready"
-        print "ready"
         self.timecodes = None
         self.deviation = 1000
+        self.bpm = 0
 
     def getTime(self):
         return time.time()
@@ -87,27 +100,33 @@ class HumanBeatSensor(object):
         tc = self.getTime()
         if tc > self.timeout:
             self.state = "ready"
-            print "ready"
+            self.bpm = 0
+            self.deviation = 1000
 
         if self.state == "ready":
             self.timecodes = [tc]
             self.timeout = tc + 3
-            self.state = "learning"
-            print "learning"
-        elif self.state == "learning":
+            self.state = "acquiring"
+        elif self.state == "acquiring":
             self.timecodes += [tc]
             if len(self.timecodes) >= STEPS_BEFORE_COMPUTE:
-                self.state = "consolidating"
-                print "consolidating"
+                self.state = "learning"
                 self.computeData(tc)
             else:
                 self.timeout = tc + 3
-        elif self.state == "consolidating":
+        elif self.state == "learning":
             self.timecodes += [tc]
             if len(self.timecodes) > MAX_STEPS:
                 self.timecodes = self.timecodes[-12:]
             self.computeData(tc)
-            
+            if self.deviation < MAX_DEVIATION:
+                self.state = "adjusting"
+        elif self.state == "adjusting":
+            self.timecodes += [tc]
+            if len(self.timecodes) > MAX_STEPS:
+                self.timecodes = self.timecodes[-12:]
+            self.computeData(tc)
+
 
     def computeIntervals(self):
         t1 = self.timecodes[:-1]
@@ -123,9 +142,8 @@ class HumanBeatSensor(object):
     def computeData(self, tc):
         intervals = self.computeIntervals()
         average = self.computeAverage(intervals)
-        deviation = self.computeDeviation(intervals, average)
-        bpm = int((1 / average) * 60)
-        print "Last: %0.2f\tAvg: %0.2f\tDev: %0.2f\tBpm: %d" % (intervals[-1], average, deviation * 50, bpm)
+        deviation = self.computeDeviation(intervals, average) * 50
+        self.bpm = int((1 / average) * 60)
         self.deviation = deviation
         self.beatLength = average
         self.timeout = tc + self.beatLength * 2
