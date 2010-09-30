@@ -44,9 +44,10 @@ class JsonProtocol(object):
                             return GARBAGE, []
                     except IndexError:
                         return GARBAGE, []
-                    docs.append(buffer[self.begin_cur: self.cur + 1])
-                    remove_cur = self.cur + 1
                     self.stack.pop()
+                    if len(self.stack) == 0:
+                        docs.append(buffer[self.begin_cur: self.cur + 1])
+                        remove_cur = self.cur + 1
                 elif char == '"':
                     self.string = True
             self.cur += 1
@@ -141,6 +142,27 @@ class JsonProtocolTest(TestCase):
         ch.addInData("")
         r = jp.protoIn()
         self.assertEqual(r, (UNDEFINED, []))
+
+    def test_paquet(self):
+        a = """
+            {
+                "id" : "1",
+                "request": "new layer",
+                "layer": "1",
+                "channels": [
+                    {"address": "1", "value": "1"},
+                    {"address": "2", "value": "255"},
+                    {"address": "3", "value": "127"}
+                ]
+            }
+        """
+        ch = ConnectionHandle(None, None)
+        jp = JsonProtocol(ch)
+        ch.addInData(a)
+        r = jp.protoIn()
+        self.assertEqual(r, (OK, [eval(a.strip())])
+        )
+
 
         
 if __name__ == "__main__":
