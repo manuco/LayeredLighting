@@ -64,31 +64,21 @@ class JsonProtocol(object):
                 return GARBAGE, []
             return OK, r
         return UNDEFINED, []
-    
-    def protoOut(self, objs):
-        r = ""
-        for obj in objs:
-            r += json.dumps(obj)
-        return r
-    
+
 def zapFirstArg(f):
     def zapFirstArgWorker(a, *arg, **kwargs):
         return f(*arg, **kwargs)
     return zapFirstArgWorker
 
-def installProtoHandler(ch):
+def protoIn(ch):
     p = JsonProtocol(ch)
     ch.protoIn = zapFirstArg(p.protoIn)
-    ch.protoOut = zapFirstArg(p.protoOut)
-
-def protoIn(ch):
-    installProtoHandler(ch)
     return ch.protoIn(None)
 
-def protoOut(ch):
-    installProtoHandler(ch)
-    return ch.protoOut(None)
+def protoOut(obj):
+    return json.dumps(obj)
 
+    
 
 from unittest import TestCase
 from unittest import main
