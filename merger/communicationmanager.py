@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
     CommunicationManager module is a module wrapping the select / poll system calls
     enabling you to have a single (or double if you adopt the non blocking mode)
@@ -447,6 +448,9 @@ class CommunicationManager(object):
         except AttributeError:
             ## socket is a FD
             sentLen = os.write(ch.socket, data)
+        except socket.error, error:
+            self._manageErroneousConnection(ch, error[0])
+            return
         ch.removeOutData(sentLen)
         self._throwLowLevelEvent((ch.sid(), "WRITE", str(data[:sentLen])))
 

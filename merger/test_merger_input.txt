@@ -1,0 +1,57 @@
+{
+    "id" : "1",
+    "request": "new layer",
+    "layer": "1",
+    "channels": [
+        {"address": "2", "value": "1"},
+        {"address": "3", "value": "255"},
+        {"address": "4", "value": "127"}
+    ]
+}
+{
+    "id" : "1",
+    "request": "new layer",
+    "layer": "2",
+    "channels": [
+        {"address": "3", "value": 0, "mixType": 0.5},
+        {"address": "4", "value": 255, "mixType": "max"},
+        {"address": "5", "value": 255, "mixType": "min"}
+    ]
+}
+
+{
+    "id" : "1",
+    "request": "new layer",
+    "layer": "3",
+    "channels": [
+        {"address": "2", "value": 255, "mixType": 0.3}
+    ]
+}
+
+{
+    "id" : "1",
+    "request": "new layer",
+    "layer": "4",
+    "channels": [
+        {"address": "2", "value": 127, "mixType": 0.6}
+    ]
+}
+
+{
+    "id" : "1",
+    "request": "status"
+}
+
+{
+    "id" : "1",
+    "request": "output"
+}
+
+
+{
+    "id" : "1",
+    "request": "quit"
+}
+
+
+

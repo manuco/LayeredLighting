@@ -76,7 +76,7 @@ def protoIn(ch):
     return ch.protoIn(None)
 
 def protoOut(obj):
-    return json.dumps(obj)
+    return json.dumps(obj) + "\n"
 
     
 
