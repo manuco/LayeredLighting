@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import json
 
 from communicationmanager import ConnectionHandle
@@ -18,8 +19,9 @@ class JsonProtocol(object):
         self.cur = 0
         self.stack = []
         self.string = False
+        self.begin_cur = 0
         
-    def inData(self):
+    def protoIn(self):
         docs = []
         remove_cur = 0
         buffer = self.ch.getInData()
@@ -62,25 +64,29 @@ class JsonProtocol(object):
             return OK, r
         return UNDEFINED, []
     
-    
+    def protoOut(self, objs):
+        r = ""
+        for obj in objs:
+            r += json.dumps(obj)
+        return r
     
 def zapFirstArg(f):
-    def zapFirstArgWorker(self, a, *arg, **kwargs):
-        return f(self, *arg, **kwargs)
-    return f
+    def zapFirstArgWorker(a, *arg, **kwargs):
+        return f(*arg, **kwargs)
+    return zapFirstArgWorker
 
 def installProtoHandler(ch):
     p = JsonProtocol(ch)
-    ch.protoIn = zapFirstArg(p.inData)
-    ch.protoOut = zapFirstArg(p.outData)
+    ch.protoIn = zapFirstArg(p.protoIn)
+    ch.protoOut = zapFirstArg(p.protoOut)
 
-def inData(ch):
+def protoIn(ch):
     installProtoHandler(ch)
-    ch.inData(None)
+    return ch.protoIn(None)
 
-def outData(ch):
+def protoOut(ch):
     installProtoHandler(ch)
-    ch.outData(None)
+    return ch.protoOut(None)
 
 
 from unittest import TestCase
@@ -92,50 +98,49 @@ class JsonProtocolTest(TestCase):
         ch = ConnectionHandle(None, None)
         jp = JsonProtocol(ch)
         ch.addInData("{}")
-        # import pdb; pdb.set_trace()
-        r = jp.inData()
-        
+        r = jp.protoIn()
         self.assertEqual(r, (OK, [{}]))
 
     def test_two_docs(self):
         ch = ConnectionHandle(None, None)
         jp = JsonProtocol(ch)
         ch.addInData("{}[]")
-        # import pdb; pdb.set_trace()
-        r = jp.inData()
-        
+        r = jp.protoIn()
         self.assertEqual(r, (OK, [{}, []]))
 
     def test_erroneous_1(self):
         ch = ConnectionHandle(None, None)
         jp = JsonProtocol(ch)
         ch.addInData("{]")
-        # import pdb; pdb.set_trace()
-        r = jp.inData()
-        
+        r = jp.protoIn()
         self.assertEqual(r, (GARBAGE, []))
 
     def test_partial(self):
         ch = ConnectionHandle(None, None)
         jp = JsonProtocol(ch)
         ch.addInData("{}[")
-        r = jp.inData()
+        r = jp.protoIn()
         self.assertEqual(r, (OK, [{}]))
         ch.addInData("]")
-        # import pdb; pdb.set_trace()
-        r = jp.inData()
+        r = jp.protoIn()
         self.assertEqual(r, (OK, [[]]))
 
     def test_real(self):
         ch = ConnectionHandle(None, None)
         jp = JsonProtocol(ch)
         ch.addInData('{"one": 1, "two": 2, "3": "}]}", "5": "bla"} [')
-        #import pdb; pdb.set_trace()
-        r = jp.inData()
+        r = jp.protoIn()
         self.assertEqual(r, (OK, [{"one": 1, "two": 2, "3": "}]}", "5": "bla"}]))
         ch.addInData("2, 3, 4]")
-        r = jp.inData()
+        r = jp.protoIn()
         self.assertEqual(r, (OK, [[2, 3, 4]]))
+
+    def test_void(self):
+        ch = ConnectionHandle(None, None)
+        jp = JsonProtocol(ch)
+        ch.addInData("")
+        r = jp.protoIn()
+        self.assertEqual(r, (UNDEFINED, []))
 
         
 if __name__ == "__main__":
