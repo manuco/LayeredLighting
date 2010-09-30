@@ -13,125 +13,190 @@ STEPS_BEFORE_COMPUTE = 3
 MAX_DEVIATION = 3
 MAX_STEPS = 4 * 8
 
-class HBSUi(QWidget):
-    def __init__(self, hbs, *args):
+class HumanBeatSensor(QWidget):
+    """
+        States :
+            waiting -> acquring -> learning -> adjusting -> beating -> waiting
+    """
+    def __init__(self, *args):
         QWidget.__init__(self, *args)
         self.prepareUi()
-        self.hbs = hbs
-        self.nextBeat = 0
-        self.connect(self.beatButton, SIGNAL("pressed()"), self.beat)
+
+        self.state = "waiting"
+        self.timecodes = []
+        self.deviation = 1000
+        self.bpm = 0
+        self.beatLength = 0
+        self.origin = 0
+        
         self.beatPerMesure = 4
         self.prepareTimers()
 
     def prepareUi(self):
         self.beatButton = QPushButton()
         self.beatButton.setText("Beat")
-        self.beatButton.setMinimumWidth(100)
+        self.beatButton.setMinimumWidth(200)
         self.beatButton.setMinimumHeight(50)
-        self.layout = QVBoxLayout(self)
+
         self.label = QLabel()
         self.stats = QLabel()
         self.beatLabel = QLabel(" ")
+
+        self.decStepButton = QPushButton()
+        self.decStepButton.setText("Step -")
+        self.incStepButton = QPushButton()
+        self.incStepButton.setText("Step +")
+
+        self.decFineStepButton = QPushButton()
+        self.decFineStepButton.setText("Adjust -")
+        self.incFineStepButton = QPushButton()
+        self.incFineStepButton.setText("Adjust +")
+
+        self.decBpmButton = QPushButton()
+        self.decBpmButton.setText("bpm -")
+        self.incBpmButton = QPushButton()
+        self.incBpmButton.setText("bpm +")
+
+        self.layout = QVBoxLayout(self)
         self.layout.addWidget(self.beatButton)
         self.layout.addWidget(self.label)
         self.layout.addWidget(self.stats)
         self.layout.addWidget(self.beatLabel)
 
+        self.bLayout = QHBoxLayout(self)
+        self.bLayout.addWidget(self.decStepButton)
+        self.bLayout.addWidget(self.incStepButton)
+        self.bLayout.addWidget(self.decFineStepButton)
+        self.bLayout.addWidget(self.incFineStepButton)
+        self.bLayout.addWidget(self.decBpmButton)
+        self.bLayout.addWidget(self.incBpmButton)
+        self.layout.addLayout(self.bLayout)
+
+        self.connect(self.decStepButton, SIGNAL("pressed()"), self.decStep)
+        self.connect(self.incStepButton, SIGNAL("pressed()"), self.incStep)
+
+        self.connect(self.decFineStepButton, SIGNAL("pressed()"), self.decStep)
+        self.connect(self.incFineStepButton, SIGNAL("pressed()"), self.incStep)
+
+
+        self.connect(self.decBpmButton, SIGNAL("pressed()"), self.decBpm)
+        self.connect(self.incBpmButton, SIGNAL("pressed()"), self.incBpm)
+
+        self.connect(self.beatButton, SIGNAL("pressed()"), self.uiBeatRequested)
+        
     def prepareTimers(self):
         self.lightOnTimer = QTimer()
-        self.lightOffTimer = QTimer()
         self.stateTimer = QTimer()
         self.lightOnTimer.setSingleShot(True)
-        self.lightOffTimer.setSingleShot(True)
         self.stateTimer.setSingleShot(True)
-        self.connect(self.lightOnTimer, SIGNAL("timeout()"), self.beatOn)
-        self.connect(self.lightOffTimer, SIGNAL("timeout()"), self.beatOff)
-        self.connect(self.stateTimer, SIGNAL("timeout()"), self.refreshState)
 
-    def beatOn(self):
-        self.beatLabel.setText("B - %d" % ((self.beatCount % self.beatPerMesure) + 1))
-        self.lightOffTimer.start()
-        self.beatCount += 1
-        if self.hbs.state == "adjusting":
-            self.nextBeat += self.hbs.beatLength
-        tmout = int((self.nextBeat - time.time()) * 1000)
-        if tmout > 0:
+        self.connect(self.lightOnTimer, SIGNAL("timeout()"), self.uiUpdate)
+        self.connect(self.stateTimer, SIGNAL("timeout()"), self.onTimeout)
+
+    def uiUpdate(self):
+        tc = time.time()
+        beatCount = self.computeBeatCount(tc)
+
+        if self.state == "adjusting" or self.state == "beating":
+            nextBeat = self.origin + (beatCount + 1) * self.beatLength
+            tmout = int((nextBeat - tc) * 1000)
             self.lightOnTimer.start(tmout)
 
-    def beatOff(self):
-        if self.hbs.state == "adjusting":
-            self.beatLabel.setText("   - %d" % ((self.beatCount % self.beatPerMesure) + 1))
+        self.label.setText(self.state)
+        if self.state in ["learning", "adjusting", "beating"]:
+            self.stats.setText("Bpm: %0.2f\t\tDev: %0.2f (%d)" % (self.bpm, self.deviation, len(self.timecodes)))
+            beat = beatCount % self.beatPerMesure
+            beats = "   " * beat + "B" + (self.beatPerMesure - beat - 1) * "   "
+            self.beatLabel.setText("%s - %d" % (beats, beat + 1))
+
         else:
-            self.beatLabel.setText("")
+            self.stats.setText("Bpm: --\t\tDev: -- (0)")
+            self.beatLabel.setText("Waiting for input")
 
-    def beat(self):
-        self.hbs.beat()
+    def uiBeatRequested(self):
+        self.beatRequest()
+        self.uiUpdate()
 
-        tc = time.time()
-        if self.hbs.state == "adjusting":
-            self.lightOffTimer.setInterval((self.hbs.beatLength / 6) * 1000)
-            self.nextBeat = tc
-            self.beatOn()
 
-        if self.hbs.timeout > tc:
-            self.stateTimer.setInterval((self.hbs.timeout - tc) * 1000)
-            self.stateTimer.start()
+    def decStep(self):
+        self.origin += self.beatLength
 
-        if len(self.hbs.timecodes) == 1:
-            self.beatCount = 0
+    def incStep(self):
+        self.origin -= self.beatLength
 
-        self.label.setText(self.hbs.state)
-        self.stats.setText("Bpm: %d\tDev: %0.2f" % (self.hbs.bpm, self.hbs.deviation))
+    def decFineStep(self):
+        self.origin -= self.beatLength / (self.beatPerMesure * 4)
 
-    def refreshState(self):
-        self.label.setText("ready")
+    def incFineStep(self):
+        self.origin += self.beatLength / (self.beatPerMesure * 4)
 
-class HumanBeatSensor(object):
-    def __init__(self):
-        self.state = "ready"
-        self.timecodes = None
-        self.deviation = 1000
-        self.bpm = 0
+    def resetOrigin(self):
+        self.origin = self.origin + self.computeBeatCount(time.time()) * self.beatLength
+
+    def decBpm(self):
+        self.resetOrigin()
+        self.bpm -= 0.5
+        self.beatLength = 60 / self.bpm
+        self.deviation = 0
+        self.timecodes = []
+
+    def incBpm(self):
+        self.resetOrigin()
+        self.bpm += 0.5
+        self.beatLength = 60 / self.bpm
+        self.deviation = 0
+        self.timecodes = []
+
+
+    def onTimeout(self):
+        if self.state == "adjusting":
+            self.state = "beating"
+        else:
+            self.state = "waiting"
+        self.uiUpdate()
 
     def getTime(self):
         return time.time()
 
-    def beat(self):
-        tc = self.getTime()
-        if tc > self.timeout:
-            self.state = "ready"
-            self.bpm = 0
-            self.deviation = 1000
+    def updateTimeout(self, length=3):
+        self.stateTimer.setInterval(length * 1000)
+        self.stateTimer.start()
 
-        if self.state == "ready":
+    def beatRequest(self):
+        tc = self.getTime()
+
+        if self.state == "waiting" or self.state == "beating":
             self.timecodes = [tc]
-            self.timeout = tc + 3
+            self.updateTimeout()
             self.state = "acquiring"
         elif self.state == "acquiring":
             self.timecodes += [tc]
             if len(self.timecodes) >= STEPS_BEFORE_COMPUTE:
                 self.state = "learning"
                 self.computeData(tc)
-            else:
-                self.timeout = tc + 3
+            self.updateTimeout()
         elif self.state == "learning":
             self.timecodes += [tc]
-            if len(self.timecodes) > MAX_STEPS:
-                self.timecodes = self.timecodes[-12:]
             self.computeData(tc)
             if self.deviation < MAX_DEVIATION:
                 self.state = "adjusting"
         elif self.state == "adjusting":
             self.timecodes += [tc]
-            if len(self.timecodes) > MAX_STEPS:
-                self.timecodes = self.timecodes[-12:]
             self.computeData(tc)
 
+        if len(self.timecodes) > MAX_STEPS:
+            self.timecodes = self.timecodes[-MAX_STEPS:]
+
+    def computeBeatCount(self, tc):
+        try:
+            return int((tc - self.origin) / self.beatLength + 0.5)
+        except ZeroDivisionError:
+            return 0
 
     def computeIntervals(self):
         t1 = self.timecodes[:-1]
         t2 = self.timecodes[1:]
-        return [b -a for a, b in zip(t1, t2)]
+        return [b - a for a, b in zip(t1, t2)]
 
     def computeAverage(self, intervals):
         return math.fsum(intervals) / len(intervals)
@@ -139,27 +204,35 @@ class HumanBeatSensor(object):
     def computeDeviation(self, intervals, average):
         return math.sqrt(math.fsum([(v - average) ** 2 for v in intervals]) / len(intervals)) / average
 
+    def computeOrigin(self):
+        aggregated_tcs = []
+        for i, tc in enumerate(self.timecodes):
+            aggregated_tcs.append(tc + self.beatLength * (len(self.timecodes) - 1 - i))
+
+        return self.computeAverage(aggregated_tcs)
+
     def computeData(self, tc):
         intervals = self.computeIntervals()
         average = self.computeAverage(intervals)
         deviation = self.computeDeviation(intervals, average) * 50
-        self.bpm = int((1 / average) * 60)
+        self.bpm = (1 / average) * 60
         self.deviation = deviation
         self.beatLength = average
-        self.timeout = tc + self.beatLength * 2
+        self.origin = self.computeOrigin()
+        self.updateTimeout(self.beatLength * 2)
 
     def timeout(self):
         pass
 
 
 def main():
-    hbs = HumanBeatSensor()
-
     app = QApplication(sys.argv)
     pyqtRemoveInputHook()
 
-    ui = HBSUi(hbs)
-    ui.show()
+    hbs = HumanBeatSensor()
+    hbs.uiUpdate()
+
+    hbs.show()
 
     app.exec_()
 
