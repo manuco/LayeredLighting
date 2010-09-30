@@ -1,0 +1,6 @@
+drivers/Makefile
+drivers/enttec_open_usb_dmx
+drivers/enttec_open_usb_dmx.o
+drivers/enttec_open_usb_dmx.pro.user
+*.pyc
+*~
