@@ -5,6 +5,7 @@ from __future__ import division
 import time, datetime
 import math
 import sys
+import json
 
 from PyQt4.Qt import *
 
@@ -120,15 +121,19 @@ class HumanBeatSensor(QWidget):
 
     def decStep(self):
         self.origin += self.beatLength
+        self.commit()
 
     def incStep(self):
         self.origin -= self.beatLength
+        self.commit()
 
     def decFineStep(self):
         self.origin -= self.beatLength / (self.beatPerMesure * 4)
+        self.commit()
 
     def incFineStep(self):
         self.origin += self.beatLength / (self.beatPerMesure * 4)
+        self.commit()
 
     def resetOrigin(self):
         self.origin = self.origin + self.computeBeatCount(time.time()) * self.beatLength
@@ -139,6 +144,7 @@ class HumanBeatSensor(QWidget):
         self.beatLength = 60 / self.bpm
         self.deviation = 0
         self.timecodes = []
+        self.commit()
 
     def incBpm(self):
         self.resetOrigin()
@@ -146,11 +152,13 @@ class HumanBeatSensor(QWidget):
         self.beatLength = 60 / self.bpm
         self.deviation = 0
         self.timecodes = []
+        self.commit()
 
 
     def onTimeout(self):
         if self.state == "adjusting":
             self.state = "beating"
+            self.commit()
         else:
             self.state = "waiting"
         self.uiUpdate()
@@ -222,8 +230,15 @@ class HumanBeatSensor(QWidget):
         self.updateTimeout(self.beatLength * 2)
 
     def timeout(self):
-        pass
+        print "plop"
 
+    def commit(self):
+        msg = {
+            "request": "beat change",
+            "origin": self.origin,
+            "beat length": self.beatLength,
+        }
+        sys.stdout.write(json.dumps(msg) + "\n")
 
 def main():
     app = QApplication(sys.argv)
