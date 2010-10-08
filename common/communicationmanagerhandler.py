@@ -36,6 +36,12 @@ class CommunicationManagerHandler(object):
                 "id": rid,
                 "error": "Value error: %s" % e.args[0],
             }
+        except Exception, e:
+            return {
+                "id": rid,
+                "error": "Exception: %s %s" % (e, e.args[0]),
+            }
+
         return r
 
 
