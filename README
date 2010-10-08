@@ -1,0 +1,22 @@
+Layered Lighting is a project of building a DMX control sofware open and free.
+
+Open: the software is built with modules as process in mind. Communication is based
+on protocols and unix sockets (ip sockets are not a target, but nothing is designed
+aginst using it)
+
+Free: as in a speech, the software is covered by GPLv3
+Free: as in a beer, nothing has to be paid for using the
+software.
+
+
+
+Repository layout :
+    - drivers : all the stuff that will speak to devices. Generally, these
+        are process that will read and write data on their stdin/stdout.
+    - merger : a tool enabling the core of the soft : it merges different
+        layers of lighting data into one, or more DMX univers. There is
+        no limit on the count of DMX univers you can manage, aside hardware
+        limits.
+    - tools : all the UI that will enable you to control your lights (faders,
+        timers, buttons, pan/tilt control, color choosing, etc)
+    - ...
