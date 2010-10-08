@@ -1,13 +1,18 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import sys, os
+sys.path.append(os.path.join(".."))
+
 import sys
 import re
 
 from collections import defaultdict
 
-from communicationmanager import CommunicationManager, allLevelListener
-from jsonprotocol import protoIn, protoOut
+from common.communicationmanager import CommunicationManager, allLevelListener
+from common.jsonprotocol import protoIn, protoOut
+
+from common.communicationmanagerhandler import CommunicationManagerHandler
 
 class Channel(object):
     def __init__(self, value, mixType, nbChan):
@@ -83,25 +88,17 @@ class Layer(object):
     def delChannel(self, address):
         del self.channels[address]
 
-class Merger(object):
+class Merger(CommunicationManagerHandler):
     def __init__(self, com=None):
-        if com:
-            self.setComManager(com)
+        CommunicationManagerHandler.__init__(self, com)
         self.layers = []
         self.galaxy = DMXGalaxy()
 
-    def setComManager(self, com):
-        self.com = com
-        com.registerHighLevelListener(allLevelListener)
-        com.registerHighLevelListener(self.onEvent)
 
     def onEvent(self, event):
-        if event[0] == "packet":
-            r = self.handleRequest(event[2], event[1])
-            self.com.send(event[1], r)
-            self.merge()
-        elif event[0] == "connection closed":
+        if event[0] == "connection closed":
             self.handleClosedConnection(event[1])
+        CommunicationManagerHandler.onEvent(self, event)
 
     def handleClosedConnection(self, cid):
         layers_to_remove = []
@@ -110,41 +107,6 @@ class Merger(object):
                 layers_to_remove.append(layer)
 
         map(self.delLayer, layers_to_remove)
-
-    def handleRequest(self, request, cid):
-
-        request_type = {
-            "new layer": self.newLayer,
-            "remove layer": self.removeLayer,
-
-            "new channels": self.newChannel,
-            "remove channels": self.removeChannel,
-            "update channels": self.updateChannel,
-
-            "status": self.status,
-            "output": self.output,
-            "quit": self.quit
-        }
-        try:
-            rid = request["id"]
-        except (KeyError, TypeError):
-            return {"error": "Protocol error, missing request id"}
-
-        try:
-            r = {"id": rid}
-            request_type[request["request"]](request, cid, r)
-        except KeyError, e:
-            return {
-                "id": rid,
-                "error": "Protocol error, missing key: %s" % e.args[0],
-            }
-        except ValueError, e:
-            return {
-                "id": rid,
-                "error": "Value error: %s" % e.args[0],
-            }
-        return r
-
 
     def newLayer(self, request, cid, r):
         """
@@ -184,6 +146,7 @@ class Merger(object):
             nbChan = int(channel.get("nbChan", 1))
             value = int(channel["value"]) & (256 * nbChan - 1)
             l.addChannel(address, value, mixType, nbChan)
+        self.merge()
 
     def updateChannel(self, request, cid, r):
         l = self.getLayer(request["layer"])
@@ -193,6 +156,7 @@ class Merger(object):
             mixType = None if not channel.has_key("mixType") else float(channel.get("mixType", 1.0))
             value = None if not channel.has_key("value") else int(channel["value"]) & (256 * nbChan - 1)
             l.updateChannel(address, value, mixType)
+        self.merge()
 
     def removeChannel(self, request, cid, r):
         l = self.getLayer(request["layer"])
@@ -200,6 +164,7 @@ class Merger(object):
         for channel in channels:
             address = int(channel["address"])
             l.delChannel(address)
+        self.merge()
 
 
     def addLayer(self, layer):
@@ -274,6 +239,20 @@ class Merger(object):
     def quit(self, request, cid, r):
         self.com.stop()
         r["status"] = "ok"
+
+    request_type = {
+        "new layer": newLayer,
+        "remove layer": removeLayer,
+
+        "new channels": newChannel,
+        "remove channels": removeChannel,
+        "update channels": updateChannel,
+
+        "status": status,
+        "output": output,
+        "quit": quit
+    }
+
 
 class DMXGalaxy(defaultdict):
     def __init__(self):
