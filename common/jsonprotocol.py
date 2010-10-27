@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 import json
 
-from communicationmanager import ConnectionHandle
-OK = ConnectionHandle.OK
-GARBAGE = ConnectionHandle.GARBAGE
-UNDEFINED = ConnectionHandle.UNDEFINED
+OK = "OK"
+GARBAGE = "GARBAGE"
+UNDEFINED = "UNDEFINED"
 
 
 class JsonProtocol(object):
@@ -14,17 +13,18 @@ class JsonProtocol(object):
         "[": "]",
     }
 
-    def __init__(self, ch):
-        self.ch = ch
+    def __init__(self):
+        self.buffer = ""
         self.cur = 0
         self.stack = []
         self.string = False
         self.begin_cur = 0
-        
-    def protoIn(self):
+    
+    def parse(self, data):
+        self.buffer += data
         docs = []
         remove_cur = 0
-        buffer = self.ch.getInData()
+        buffer = self.buffer
         max_cur = len(buffer)
         while self.cur < max_cur:
             char = buffer[self.cur]
@@ -52,7 +52,7 @@ class JsonProtocol(object):
                     self.string = True
             self.cur += 1
         
-        self.ch.clearInData(remove_cur)
+        self.buffer = buffer[remove_cur:]
         self.begin_cur -= remove_cur
         self.cur -= remove_cur
         r = []
@@ -70,10 +70,23 @@ def zapFirstArg(f):
         return f(*arg, **kwargs)
     return zapFirstArgWorker
 
+rc = {
+    OK: ConnectionHandle.OK,
+    GARBAGE: ConnectionHandle.GARBAGE,  
+    UNDEFINED: ConnectionHandle.UNDEFINED, 
+}
+
+def feedData(p):
+    def feedDataWorker(ch):
+        r = p.parse(ch.getInData())
+        ch.clearInData()
+        return (rc[r[0]], r[1])
+    return feedDataWorker
+
 def protoIn(ch):
-    p = JsonProtocol(ch)
-    ch.protoIn = zapFirstArg(p.protoIn)
-    return ch.protoIn(None)
+    p = JsonProtocol()
+    ch.protoIn = feedData(p)
+    return ch.protoIn(ch)
 
 def protoOut(obj):
     return json.dumps(obj) + "\n"
@@ -86,51 +99,44 @@ from unittest import main
 class JsonProtocolTest(TestCase):
 
     def test_simple(self):
-        ch = ConnectionHandle(None, None)
-        jp = JsonProtocol(ch)
-        ch.addInData("{}")
-        r = jp.protoIn()
+        jp = JsonProtocol()
+        data = "{}"
+        r = jp.parse(data)
         self.assertEqual(r, (OK, [{}]))
 
     def test_two_docs(self):
-        ch = ConnectionHandle(None, None)
-        jp = JsonProtocol(ch)
-        ch.addInData("{}[]")
-        r = jp.protoIn()
+        jp = JsonProtocol()
+        data = "{}[]"
+        r = jp.parse(data)
         self.assertEqual(r, (OK, [{}, []]))
 
     def test_erroneous_1(self):
-        ch = ConnectionHandle(None, None)
-        jp = JsonProtocol(ch)
-        ch.addInData("{]")
-        r = jp.protoIn()
+        jp = JsonProtocol()
+        data = "{]"
+        r = jp.parse(data)
         self.assertEqual(r, (GARBAGE, []))
 
     def test_partial(self):
-        ch = ConnectionHandle(None, None)
-        jp = JsonProtocol(ch)
-        ch.addInData("{}[")
-        r = jp.protoIn()
+        jp = JsonProtocol()
+        data  = "{}["
+        r = jp.parse(data)
         self.assertEqual(r, (OK, [{}]))
-        ch.addInData("]")
-        r = jp.protoIn()
+        data = "]"
+        r = jp.parse(data)
         self.assertEqual(r, (OK, [[]]))
 
     def test_real(self):
-        ch = ConnectionHandle(None, None)
-        jp = JsonProtocol(ch)
-        ch.addInData('{"one": 1, "two": 2, "3": "}]}", "5": "bla"} [')
-        r = jp.protoIn()
+        jp = JsonProtocol()
+        data = '{"one": 1, "two": 2, "3": "}]}", "5": "bla"} ['
+        r = jp.parse(data)
         self.assertEqual(r, (OK, [{"one": 1, "two": 2, "3": "}]}", "5": "bla"}]))
-        ch.addInData("2, 3, 4]")
-        r = jp.protoIn()
+        data = "2, 3, 4]"
+        r = jp.parse(data)
         self.assertEqual(r, (OK, [[2, 3, 4]]))
 
     def test_void(self):
-        ch = ConnectionHandle(None, None)
-        jp = JsonProtocol(ch)
-        ch.addInData("")
-        r = jp.protoIn()
+        jp = JsonProtocol()
+        r = jp.parse("")
         self.assertEqual(r, (UNDEFINED, []))
 
     def test_paquet(self):
@@ -146,10 +152,9 @@ class JsonProtocolTest(TestCase):
                 ]
             }
         """
-        ch = ConnectionHandle(None, None)
-        jp = JsonProtocol(ch)
-        ch.addInData(a)
-        r = jp.protoIn()
+        
+        jp = JsonProtocol()
+        r = jp.parse(a)
         self.assertEqual(r, (OK, [eval(a.strip())])
         )
 
