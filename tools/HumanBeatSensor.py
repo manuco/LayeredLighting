@@ -10,7 +10,7 @@ import json
 from PyQt4.Qt import *
 
 
-STEPS_BEFORE_COMPUTE = 3
+STEPS_BEFORE_COMPUTE = 4
 MAX_DEVIATION = 3
 MAX_STEPS = 4 * 8
 
@@ -44,19 +44,19 @@ class HumanBeatSensor(QWidget):
         self.beatLabel = QLabel(" ")
 
         self.decStepButton = QPushButton()
-        self.decStepButton.setText("Step -")
+        self.decStepButton.setText("Beat <")
         self.incStepButton = QPushButton()
-        self.incStepButton.setText("Step +")
+        self.incStepButton.setText("Beat >")
 
         self.decFineStepButton = QPushButton()
-        self.decFineStepButton.setText("Adjust -")
+        self.decFineStepButton.setText("Adjust <")
         self.incFineStepButton = QPushButton()
-        self.incFineStepButton.setText("Adjust +")
+        self.incFineStepButton.setText("Adjust >")
 
         self.decBpmButton = QPushButton()
-        self.decBpmButton.setText("bpm -")
+        self.decBpmButton.setText("BPM -")
         self.incBpmButton = QPushButton()
-        self.incBpmButton.setText("bpm +")
+        self.incBpmButton.setText("BPM +")
 
         self.layout = QVBoxLayout(self)
         self.layout.addWidget(self.beatButton)
@@ -73,11 +73,11 @@ class HumanBeatSensor(QWidget):
         self.bLayout.addWidget(self.incBpmButton)
         self.layout.addLayout(self.bLayout)
 
-        self.connect(self.decStepButton, SIGNAL("pressed()"), self.decStep)
-        self.connect(self.incStepButton, SIGNAL("pressed()"), self.incStep)
+        self.connect(self.decStepButton, SIGNAL("pressed()"), self.decBeat)
+        self.connect(self.incStepButton, SIGNAL("pressed()"), self.incBeat)
 
-        self.connect(self.decFineStepButton, SIGNAL("pressed()"), self.decStep)
-        self.connect(self.incFineStepButton, SIGNAL("pressed()"), self.incStep)
+        self.connect(self.decFineStepButton, SIGNAL("pressed()"), self.decFineAdjust)
+        self.connect(self.incFineStepButton, SIGNAL("pressed()"), self.incFineAdjust)
 
 
         self.connect(self.decBpmButton, SIGNAL("pressed()"), self.decBpm)
@@ -119,20 +119,20 @@ class HumanBeatSensor(QWidget):
         self.uiUpdate()
 
 
-    def decStep(self):
+    def decBeat(self):
         self.origin += self.beatLength
         self.commit()
 
-    def incStep(self):
+    def incBeat(self):
         self.origin -= self.beatLength
         self.commit()
 
-    def decFineStep(self):
-        self.origin -= self.beatLength / (self.beatPerMesure * 4)
+    def decFineAdjust(self):
+        self.origin += self.beatLength / 10
         self.commit()
 
-    def incFineStep(self):
-        self.origin += self.beatLength / (self.beatPerMesure * 4)
+    def incFineAdjust(self):
+        self.origin -= self.beatLength / 10
         self.commit()
 
     def resetOrigin(self):
@@ -140,7 +140,7 @@ class HumanBeatSensor(QWidget):
 
     def decBpm(self):
         self.resetOrigin()
-        self.bpm -= 0.5
+        self.bpm -= 0.1
         self.beatLength = 60 / self.bpm
         self.deviation = 0
         self.timecodes = []
@@ -148,7 +148,7 @@ class HumanBeatSensor(QWidget):
 
     def incBpm(self):
         self.resetOrigin()
-        self.bpm += 0.5
+        self.bpm += 0.1
         self.beatLength = 60 / self.bpm
         self.deviation = 0
         self.timecodes = []
@@ -182,6 +182,7 @@ class HumanBeatSensor(QWidget):
             if len(self.timecodes) >= STEPS_BEFORE_COMPUTE:
                 self.state = "learning"
                 self.computeData(tc)
+                self.timecodes = self.timecodes[len(self.timecodes) // 2 :]
             self.updateTimeout()
         elif self.state == "learning":
             self.timecodes += [tc]
