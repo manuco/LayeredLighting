@@ -23,7 +23,10 @@ class Bank(object):
         del self.objs[uid]
 
     def getNewUid(self):
-        return max(self.objs.keys()) + 1
+        try:
+            return str(max(self.objs.keys()) + 1)
+        except ValueError:
+            return "1"
 
 class BankCounter(CommunicationManagerHandler):
     def __init__(self, com=None):
