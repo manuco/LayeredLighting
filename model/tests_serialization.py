@@ -21,6 +21,11 @@ register("D", D)
 class G(JSonSerialisableObject): pass
 register("G", G)
 
+class L(JSonSerialisableObject):
+    def __init__(self):
+        self.register_attrs("l")
+
+
 class BuilderTests(unittest.TestCase):
     def test_1(self):
         a = A()
@@ -136,6 +141,35 @@ class BuilderTests(unittest.TestCase):
             ]
         )
 
+    def test_lists(self):
+        ## XXX stand by
+        return
+        stream1 = {"kind": "L", "uid": "l", "lists": {"l": 2}}
+        obj, missing = buildObject(None, stream1)
+        self.assertEquals(set(missing), set(["l.l.0", "l.l.1"]))
+        
+
+    def test_serialization_lists(self):
+        ## XXX stand by
+        return
+        a1 = A()
+        a1.b = 1
+        a1.c = 2
+
+        a2 = A()
+        a2.b = 3
+        a2.c = 4
+
+        l = L()
+        l.l = [a1, a2]
+        streams = serialize(l, "l")
+        self.assertEquals(streams,
+            [
+                {"kind": "A", "attrs": {"b": 1, "c": 2}, "uid": "l.l.0"},
+                {"kind": "A", "attrs": {"b": 3, "c": 4}, "uid": "l.l.1"},
+                {"kind": "L", "uid": "l", "lists": {"l": 2}},
+            ]
+        )
 
 
 if __name__ == "__main__":

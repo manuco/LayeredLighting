@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+
+from __future__ import division
+
 import sys, os
 sys.path.append(os.path.join(".."))
 
@@ -12,11 +15,14 @@ class ChannelInfo(object):
 
         mix is either "min", "max", or 0 (only down value) -> 1 (only our value) float
             will be used by the merger
+
+        fade_affected is wether or not the channel is affected by fades operations
     """
     def __init__(self):
         self._channels = []
         self._value = 0
         self._mix = 1
+        self._fade_affected = True
 
 class Length(object):
     """
@@ -71,8 +77,8 @@ class Scene(object):
         self._length = None
         self._length_fade_in = None
         self._length_fade_out = None
-        self._type_fade_in = None
-        self._type_fade_out = None
+        self._type_fade_in = "linear"
+        self._type_fade_out = "linear"
         self._fade_affected_channels = set()
         self._effect_affected_channels = set()
         self._effect = None
@@ -110,9 +116,9 @@ class Sequence(object):
         self._total_length = None
         self._step_event = None
 
-class MultiSequencePlayable(object):
+class MultiSequenceItem(object):
     """
-        A multi sequence playable embed any playable (multisequence, sequence or scene)
+        A multi sequence item embed any playable (multisequence, sequence or scene)
 
         Playable is a reference to a playable.
         Begin is the length to wait before playing this.
@@ -135,6 +141,47 @@ class MultiSequence(object):
     """
     def __init__(self):
         # XXX should storage be more efficient ?
-        self._ms_playables = []
+        self._ms_items = []
+
+
+
+
+class TimeCode(object):
+    """
+        Define some aspects of a dot in time
+    """
+
+    def __init__(self, time, beatLength, beatPerMeasure, firstBarTime):
+
+
+        self.time = time
+        self.beatLength = beatLength
+        self.beatPerMeasure = beatPerMeasure
+        self.measureLength = beatLength * beatPerMeasure
+        
+        shift = (self.measureLength - firstBarTime) % self.measureLength
+        delta = (self.beatLength - firstBarTime) % self.beatLength
+
+        self.measureTime = (time + shift) % self.measureLength
+        self.beatTime = self.measureTime % self.beatLength
+        self.beat = (time + delta) // self.beatLength
+        self.normBeat = self.beat + (shift // self.beatLength)
+        self.measure = (shift + time) // self.measureLength
+        self.beatInMeasure = self.measureTime // self.beatLength
+
+        self.tc = self.time, self.measureTime, self.beatTime, self.beat, self.normBeat, self.measure, self.beatInMeasure, self.measureLength, self.beatLength, self.beatPerMeasure
+
+
+
+
+
+
+
+
+
+
+
+
 
         
+    
