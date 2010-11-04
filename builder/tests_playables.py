@@ -135,6 +135,11 @@ class LayerTests(unittest.TestCase):
         self.assertEqual(tc.tc, (10750, 1500, 0, 22, 23, 5, 3, 2000, 500, 4))
 
 
+    def test_timecode_negative_1(self):
+        tc = TimeCode(5250, 500, 4, 7250)
+        self.assertEqual(tc.tc, (5250, 0, 0, 11, 12, 3, 0, 2000, 500, 4))
+
+
 
     def test_1(self):
         return
