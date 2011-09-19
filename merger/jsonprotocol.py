@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import json
+from communicationmanager import ConnectionHandle
 
 OK = "OK"
 GARBAGE = "GARBAGE"

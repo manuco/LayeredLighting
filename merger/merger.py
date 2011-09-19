@@ -10,12 +10,43 @@ from communicationmanager import CommunicationManager, allLevelListener
 from jsonprotocol import protoIn, protoOut
 
 class Channel(object):
+    """
+        A channel is a feature channel. It describe DMX channels on
+        8 or 16 bits (or more...)
+        
+        It contains 
+        - the value for this channel
+        - the DMX channel count needed to encode the value
+            (think about fine pan/tilt for moving heads)
+        - the mixtype : 
+            - a float between 0.0 and 1.0 that will be used to mix this channel value
+            with the lower one
+            - "min": the min between this value and the lower one
+            - "max": the max between this value and the lower one
+            If this channel is the lowest one, the mixtype is not used
+            (defaults to 1.0).
+    """
     def __init__(self, value, mixType, nbChan):
         self.value = value
         self.nbChan = nbChan
         self.mixType = mixType
 
 class Layer(object):
+    """
+        A layer is a set of channels that interract with channels of lower
+        layers.
+        
+        Layers are used by the merger to compute the DMX values for the DMX Galaxy.
+        
+        Layers have a level, which orders them. Levels are in dotted notation :
+         2 > 1
+         2.1 > 2
+         2.1 > 1
+         1.1 > 1
+         1.1.1 > 1.1
+         -1 > 99
+         -2 > -1
+    """
 
     def _checkLevel(self, level):
         regexp = r"^-?\d+(\.-?\d+)*$"
@@ -62,7 +93,7 @@ class Layer(object):
     def addChannel(self, address, value, mixType=1.0, nbChan=1):
         """
             Add channel values to this layer
-            @param address: the channel address
+            @param address: the channel address. Channels are replaced if they already exist.
             @param value: the value of this channel
             @param mixType: how to compute the layer's value with the under one
                 values can be :
@@ -75,6 +106,9 @@ class Layer(object):
 
 
     def updateChannel(self, address, value=None, mixType=None):
+        """
+            Update channel value or mixType (or both)
+        """
         if value is not None:
             self.channels[address].value = value
         if mixType is not None:
@@ -84,6 +118,12 @@ class Layer(object):
         del self.channels[address]
 
 class Merger(object):
+    """
+        A merger takes a set of layers and generate a DMX galaxy based on channel
+        values placed in channels.
+        
+        Most operations are available as commands sent on a unix socket. 
+    """
     def __init__(self, com=None):
         if com:
             self.setComManager(com)
